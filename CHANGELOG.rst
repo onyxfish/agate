@@ -1,6 +1,8 @@
 1.14.3 - Unreleased
 -------------------
 
+- fix: :meth:`.Table.join` accepts column indices in composite keys and removes the correct key column when columns have identical values.
+- fix: :meth:`.Table.join` raises the expected ``ValueError`` for unmatched composite keys when ``require_match=True``.
 - fix: :meth:`.Table.distinct` now deduplicates rows when ``key`` is a sequence of column names.
 - fix: :class:`.Rank` ranks null values last when ``reverse=True``.
 - fix: :meth:`.Table.from_fixed` reads the schema instead of the data file when ``schema_path`` is a file-like object.
