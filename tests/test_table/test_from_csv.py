@@ -1,4 +1,8 @@
+import io
+import os
+import sys
 import warnings
+from unittest.mock import patch
 
 from agate import Table
 from agate.data_types import Boolean, Date, DateTime, Number, Text, TimeDelta
@@ -118,6 +122,56 @@ class TestFromCSV(AgateTestCase):
         self.assertColumnTypes(table2, [Number, Text, Boolean, Date, DateTime, TimeDelta])
 
         self.assertRows(table2, table1.rows)
+
+    def from_piped_stdin(self, data, newline=None, **kwargs):
+        # Pass the data through a real pipe, which, like piped standard input, is not seekable.
+        r, w = os.pipe()
+        with open(w, 'wb') as f:
+            f.write(data)
+        with open(r, encoding='utf-8', newline=newline) as stdin, patch('sys.stdin', stdin):
+            return Table.from_csv(sys.stdin, **kwargs)
+
+    def test_from_csv_sniff_limit_stdin(self):
+        table1 = Table(self.rows, self.column_names, self.column_types)
+        with open('examples/test_csv_sniff.csv', 'rb') as f:
+            table2 = self.from_piped_stdin(f.read(), sniff_limit=200)
+
+        self.assertColumnNames(table2, table1.column_names)
+        self.assertColumnTypes(table2, [Number, Text, Boolean, Date, DateTime, TimeDelta])
+
+        self.assertRows(table2, table1.rows)
+
+    def test_from_csv_sniff_limit_stdin_skip_lines(self):
+        table1 = Table(self.rows, self.column_names, self.column_types)
+        with open('examples/test_csv_sniff.csv', 'rb') as f:
+            table2 = self.from_piped_stdin(b'skipped line\n' + f.read(), skip_lines=1, sniff_limit=200)
+
+        self.assertColumnNames(table2, table1.column_names)
+        self.assertColumnTypes(table2, [Number, Text, Boolean, Date, DateTime, TimeDelta])
+
+        self.assertRows(table2, table1.rows)
+
+    def test_from_csv_sniff_limit_stdin_skip_lines_untranslated_newlines(self):
+        # Standard input that doesn't translate line endings, with \r line endings.
+        table = self.from_piped_stdin(b'skipped line\ra;b\r1;2\r3;4\r', newline='', skip_lines=1, sniff_limit=1024)
+
+        self.assertColumnNames(table, ['a', 'b'])
+        self.assertRows(table, [(1, 2), (3, 4)])
+
+    def test_from_csv_sniff_limit_stdin_skip_lines_row_limit(self):
+        # More than a pipe holds, so use a buffered stream like sys.stdin. The sample ends partway through a row, and
+        # standard input must be read no further than row_limit requires (e.g. csvlook --max-rows).
+        data = b'skipped line\na;b\n' + b'3;4\n' * 100000
+        stdin = io.TextIOWrapper(io.BufferedReader(io.BytesIO(data)), encoding='utf-8')
+        with stdin, patch('sys.stdin', stdin):
+            table = Table.from_csv(sys.stdin, skip_lines=1, sniff_limit=10, row_limit=3)
+
+            self.assertNotEqual(sys.stdin.read(), '')
+
+        self.assertColumnNames(table, ['a', 'b'])
+        self.assertColumnTypes(table, [Number, Number])
+
+        self.assertRows(table, [(3, 4)] * 3)
 
     def test_from_csv_skip_lines(self):
         warnings.simplefilter('ignore')

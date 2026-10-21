@@ -5,6 +5,7 @@
 - fix: :class:`.Rank` ranks null values last when ``reverse=True``.
 - fix: :meth:`.Table.from_fixed` reads the schema instead of the data file when ``schema_path`` is a file-like object.
 - fix: :class:`.PercentileRank` returns a null rank for null values instead of raising a ``TypeError``.
+- fix: :meth:`.Table.from_csv` sniffs the dialect of standard input when ``skip_lines`` is set.
 
 1.14.2 - February 27, 2026
 --------------------------

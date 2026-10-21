@@ -54,6 +54,7 @@ def from_csv(cls, path, column_names=None, column_types=None, row_names=None, sk
             close = True
 
         if isinstance(skip_lines, int):
+            lines_skipped = skip_lines > 0
             while skip_lines > 0:
                 f.readline()
                 skip_lines -= 1
@@ -67,7 +68,13 @@ def from_csv(cls, path, column_names=None, column_types=None, row_names=None, sk
             handle = io.StringIO(f.read())
             sample = handle.getvalue()
         elif sniff_limit > 0:
-            if f == sys.stdin:
+            if f == sys.stdin and lines_skipped:
+                # Reading the skipped lines filled the text layer's buffer, which `peek` can't see, and standard input
+                # might not be seekable. Read the sample, then put it back in front of the rest of the input, after
+                # completing its last line, so that no row is split in two.
+                sample = f.read(sniff_limit)  # reads *characters*
+                handle = itertools.chain(io.StringIO(sample + f.readline(), newline=''), f)
+            elif f == sys.stdin:
                 # "At most one single read on the raw stream is done to satisfy the call. The number of bytes returned
                 # may be less or more than requested." In other words, it reads the buffer_size, which might be less or
                 # more than the sniff_limit. On my machine, the buffer_size of sys.stdin.buffer is the length of the
